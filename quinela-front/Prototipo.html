@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiniela Mundial 2026 - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-[#121212] text-gray-200 font-sans antialiased min-h-screen p-4 md:p-6">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <header class="flex items-center space-x-3 pb-2">
+            <span class="text-2xl">🏆</span>
+            <h1 class="text-xl font-bold tracking-tight text-white">
+                Quiniela Mundial 2026 <span class="text-gray-400 font-medium text-sm ml-2">MX CA US</span>
+            </h1>
+        </header>
+
+        <div id="loading" class="flex flex-col items-center justify-center py-24 space-y-4">
+            <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent"></div>
+            <p class="text-gray-400 text-sm">Sincronizando datos en tiempo real...</p>
+        </div>
+
+        <main id="content" class="hidden space-y-6">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <div class="lg:col-span-2 bg-[#1e1e1e] border border-[#2d2d2d] rounded-lg p-5 flex flex-col justify-between">
+                    <div class="flex items-center space-x-2 mb-4">
+                        <span class="text-blue-400 text-sm"><i class="fa-solid fa-chart-line"></i></span>
+                        <h3 class="text-sm font-semibold text-gray-300">Tendencia de Puntos Acumulados</h3>
+                    </div>
+                    <div class="w-full h-72 relative">
+                        <canvas id="chartTendencia"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-[#1e1e1e] border border-[#2d2d2d] rounded-lg p-4 flex flex-col justify-between space-y-1">
+                    
+                    <div class="bg-[#242424] p-3.5 rounded border-l-4 border-emerald-500 flex items-start space-x-3">
+                        <div class="text-emerald-500 mt-0.5"><i class="fa-solid fa-fire text-sm"></i></div>
+                        <div class="min-w-0 w-full">
+                            <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Más puntos este día</span>
+                            <h4 class="text-sm font-bold text-white break-words" id="kpi-max-nombre">--</h4>
+                            <p class="text-xs text-emerald-400 mt-0.5" id="kpi-max-puntos">+0 puntos sumados hoy</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#242424] p-3.5 rounded border-l-4 border-rose-500 flex items-start space-x-3">
+                        <div class="text-rose-500 mt-0.5"><i class="fa-solid fa-circle-minus text-sm"></i></div>
+                        <div class="min-w-0 w-full">
+                            <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Menos puntos este día</span>
+                            <h4 class="text-sm font-bold text-white break-words" id="kpi-min-nombre">--</h4>
+                            <p class="text-xs text-rose-400 mt-0.5" id="kpi-min-puntos">Solo sumó +0 puntos hoy</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#242424] p-3.5 rounded border-l-4 border-amber-500 flex items-start space-x-3">
+                        <div class="text-amber-500 mt-0.5"><i class="fa-solid fa-rocket text-sm"></i></div>
+                        <div class="min-w-0 w-full">
+                            <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Más posiciones subió hoy</span>
+                            <h4 class="text-sm font-bold text-white break-words" id="kpi-subida-nombre">--</h4>
+                            <p class="text-xs text-amber-400 mt-0.5" id="kpi-subida-detalle">¡Escaló fuerte en la tabla!</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="bg-[#1e1e1e] border border-[#2d2d2d] rounded-lg overflow-hidden">
+                
+                <div class="p-4 border-b border-[#2d2d2d] flex items-center space-x-2">
+                    <span>📋</span>
+                    <h3 class="text-sm font-semibold text-gray-300">Tabla de Posiciones Oficial</h3>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr id="tabla-header" class="bg-[#007acc] text-white text-xs font-bold uppercase tracking-wider">
+                                <th class="p-3 text-center w-16">Pos</th>
+                                <th class="p-3 min-w-[150px]">Nombre</th>
+                                <th class="p-3 text-center w-32 bg-[#e6b800]/20 text-yellow-400 font-black">Puntos Totales</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-body" class="divide-y divide-[#2d2d2d]">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        const API_URL = "http://localhost:7071/api/obtenerPosiciones";
+        let miGrafico = null;
+
+        async function initDashboard() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    const totalJornadas = data.jornada_actual;
+                    const ultimoIdx = totalJornadas - 1;
+
+                    // ==========================================
+                    //  CÁLCULO DINÁMICO DE KPIS (CON EMPATES)
+                    // ==========================================
+                    let jugadoresMétricas = data.tabla.map(row => {
+                        const puntosHoy = (row.historial[ultimoIdx] !== undefined ? row.historial[ultimoIdx] : 0) - 
+                                          (ultimoIdx > 0 && row.historial[ultimoIdx - 1] !== undefined ? row.historial[ultimoIdx - 1] : 0);
+                        return { nombre: row.nombre, puntosHoy, row };
+                    });
+
+                    const maxPuntos = Math.max(...jugadoresMétricas.map(j => j.puntosHoy));
+                    const minPuntos = Math.min(...jugadoresMétricas.map(j => j.puntosHoy));
+
+                    const losQueMasSumaron = jugadoresMétricas.filter(j => j.puntosHoy === maxPuntos).map(j => j.nombre);
+                    const losQueMenosSumaron = jugadoresMétricas.filter(j => j.puntosHoy === minPuntos).map(j => j.nombre);
+
+                    // Inyectar KPI Máximo
+                    document.getElementById('kpi-max-nombre').innerText = losQueMasSumaron.join(', ');
+                    document.getElementById('kpi-max-puntos').innerText = `+${maxPuntos} puntos sumados hoy`;
+
+                    // Inyectar KPI Mínimo
+                    document.getElementById('kpi-min-nombre').innerText = losQueMenosSumaron.join(', ');
+                    document.getElementById('kpi-min-puntos').innerText = minPuntos === 0 ? 'No sumó puntos hoy' : `Solo sumó +${minPuntos} pts hoy`;
+
+                    // 2. Calcular Quién Subió Más Posiciones hoy
+                    let tablaPrevia = [...data.tabla].map(row => ({
+                        nombre: row.nombre,
+                        puntosPrevios: ultimoIdx > 0 ? (row.historial[ultimoIdx - 1] || 0) : 0
+                    })).sort((a, b) => b.puntosPrevios - a.puntosPrevios);
+
+                    let subidas = data.tabla.map(row => {
+                        const posPrevia = tablaPrevia.findIndex(p => p.nombre === row.nombre) + 1;
+                        const puestosSubidos = posPrevia - row.posicion_actual;
+                        return { nombre: row.nombre, puestosSubidos };
+                    });
+
+                    const maxSubida = Math.max(...subidas.map(s => s.puestosSubidos));
+                    let losQueMasSubieron = [];
+
+                    if (maxSubida > 0) {
+                        losQueMasSubieron = subidas.filter(s => s.puestosSubidos === maxSubida).map(s => s.nombre);
+                        document.getElementById('kpi-subida-nombre').innerText = losQueMasSubieron.join(', ');
+                        
+                        if (losQueMasSubieron.length === 1) {
+                            const palabraPosicion = maxSubida === 1 ? 'posición' : 'posiciones';
+                            document.getElementById('kpi-subida-detalle').innerText = `¡Escaló ${maxSubida} ${palabraPosicion} en el Día ${totalJornadas}!`;
+                        } else {
+                            document.getElementById('kpi-subida-detalle').innerText = `¡Escalaron ${maxSubida} posiciones en el Día ${totalJornadas}!`;
+                        }
+                    } else {
+                        document.getElementById('kpi-subida-nombre').innerText = losQueMasSumaron.join(', ');
+                        
+                        if (losQueMasSumaron.length === 1) {
+                            document.getElementById('kpi-subida-detalle').innerText = `¡Mantuvo la cima con +${maxPuntos} pts!`;
+                        } else {
+                            document.getElementById('kpi-subida-detalle').innerText = `¡Mantuvieron la cima con +${maxPuntos} pts!`;
+                        }
+                    }
+
+                    // ==========================================
+                    //  RENDERIZADO DE LA TABLA DE POSICIONES
+                    // ==========================================
+                    const headerRow = document.getElementById('tabla-header');
+                    headerRow.innerHTML = `
+                        <th class="p-3 text-center w-16">Pos</th>
+                        <th class="p-3 min-w-[150px]">Nombre</th>
+                        <th class="p-3 text-center w-32 bg-[#e6b800]/20 text-yellow-400 font-black">Puntos Totales</th>
+                    `;
+                    
+                    for (let i = 1; i <= totalJornadas; i++) {
+                        headerRow.innerHTML += `<th class="p-3 text-center min-w-[80px]">Día ${i}</th>`;
+                    }
+
+                    const tbody = document.getElementById('tabla-body');
+                    tbody.innerHTML = "";
+
+                    data.tabla.forEach(row => {
+                        const tr = document.createElement('tr');
+                        tr.className = "hover:bg-[#252525] transition-colors text-sm text-gray-300";
+
+                        let celdasDias = "";
+                        for (let i = 0; i < totalJornadas; i++) {
+                            const valorDia = row.historial[i] !== undefined ? row.historial[i] : '--';
+                            celdasDias += `<td class="p-3 text-center font-mono border-x border-[#2d2d2d]/20">${valorDia}</td>`;
+                        }
+
+                        tr.innerHTML = `
+                            <td class="p-3 text-center font-bold text-gray-400 bg-[#161616]/50">${row.posicion_actual}</td>
+                            <td class="p-3 font-semibold text-white">${row.nombre}</td>
+                            <td class="p-3 text-center bg-[#ffe600]/5 text-yellow-400 font-extrabold text-base border-x border-[#2d2d2d]/30">${row.puntos_totales}</td>
+                            ${celdasDias}
+                        `;
+                        tbody.appendChild(tr);
+                    });
+
+                    renderizarGrafico(data.tabla, totalJornadas);
+
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('content').classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error(err);
+                document.getElementById('loading').innerHTML = `
+                    <p class="text-rose-500 font-semibold"><i class="fa-solid fa-circle-exclamation mr-1"></i> Error de conexión con el Backend local.</p>
+                `;
+            }
+        }
+
+        function renderizarGrafico(todosJugadores, totalJornadas) {
+            const ctx = document.getElementById('chartTendencia').getContext('2d');
+            const labels = Array.from({length: totalJornadas}, (_, i) => `Día ${i + 1}`);
+
+            const coloresBase = [
+                '#3a86ff', '#38b000', '#ffb703', '#e63946', '#9b5de5', '#f15bb5', '#00f5d4', '#00bbf9'
+            ];
+
+            const datasets = todosJugadores.map((jugador, idx) => {
+                const color = coloresBase[idx % coloresBase.length];
+                return {
+                    label: jugador.nombre,
+                    data: jugador.historial,
+                    borderColor: color,
+                    backgroundColor: color + '1A', 
+                    borderWidth: 2,
+                    tension: 0.15,
+                    // CAMBIO AQUÍ: 'true' para todos los usuarios. Arranca 100% oculto.
+                    hidden: true, 
+                    pointRadius: 0,
+                    pointHoverRadius: 5
+                };
+            });
+
+            if (miGrafico) miGrafico.destroy();
+
+            miGrafico = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { 
+                                color: '#aaaaaa', 
+                                boxWidth: 10, 
+                                font: { size: 11, weight: 'bold' },
+                                padding: 12
+                            },
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        x: { grid: { color: '#242424', borderDash: [4, 4] }, ticks: { color: '#888888' } },
+                        y: { grid: { color: '#242424', borderDash: [4, 4] }, ticks: { color: '#888888' } }
+                    }
+                }
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', initDashboard);
+    </script>
+</body>
+</html>
