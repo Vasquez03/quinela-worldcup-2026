@@ -116,7 +116,7 @@ def obtenerPosiciones(req: func.HttpRequest) -> func.HttpResponse:
             json.dumps(resultado_final, ensure_ascii=False),
             mimetype="application/json",
             status_code=200,
-            headers={"Access-Control-Allow-Origin": "*"}
+            headers={"Access-Control-Allow-Origin": "https://orange-dune-00a7ad10f.7.azurestaticapps.net"}
         )
       
     except Exception as e:
@@ -125,6 +125,6 @@ def obtenerPosiciones(req: func.HttpRequest) -> func.HttpResponse:
             json.dumps({"status": "error", "message": str(e)}),
             mimetype="application/json",
             status_code=500,
-            headers={"Access-Control-Allow-Origin": "*"}
+            headers={"Access-Control-Allow-Origin": "https://orange-dune-00a7ad10f.7.azurestaticapps.net"}
         )
 
